@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wilson Home Casting</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Cast Control</h1>
+        <form id="urlForm">
+            <input type="text" id="urlInput" name="url" placeholder="Enter IMDb or YouTube URL" required>
+            <input type="submit" value="Add to Queue">
+        </form>
+
+        <h2>Player Controls</h2>
+        <div class="controls">
+            <button onclick="sendPlayerControl('play_pause')">Play/Pause</button>
+            <button onclick="sendPlayerControl('fullscreen')">Fullscreen</button>
+            <button onclick="sendPlayerControl('seek_backward')">Seek &larr;</button>
+            <button onclick="sendPlayerControl('seek_forward')">Seek &rarr;</button>
+            <button onclick="sendVolumeControl('vol_down')">Vol -</button>
+            <button onclick="sendVolumeControl('vol_up')">Vol +</button>
+            <button onclick="sendPlayerControl('stop')">Stop</button>
+            <button onclick="sendVolumeControl('vol_mute')">Mute</button>
+            <button onclick="queueControl('previous')">&laquo; Prev</button>
+            <button onclick="queueControl('next')">Next &raquo;</button>
+        </div>
+        <div id="status" class="status">
+            <p><strong>Now Playing:</strong> <span id="current_url">None</span></p>
+            <p><strong>Active Player:</strong> <span id="active_player">None</span></p>
+            <p id="message">Waiting for action...</p>
+        </div>
+        <div class="queue-container">
+            <h2>Queue <button class="clear-queue-btn" onclick="queueControl('clear')">Clear All</button></h2>
+            <ol id="queue-list"></ol>
+        </div>
+    </div>
+
+    <script>
+        // --- RENDER LOGIC ---
+        function renderQueue(queueData) {
+            const queueList = document.getElementById('queue-list');
+            const currentUrlSpan = document.getElementById('current_url');
+            const activePlayerSpan = document.getElementById('active_player');
+
+            queueList.innerHTML = ''; // Clear current list
+
+            if (queueData.queue.length === 0) {
+                const li = document.createElement('li');
+                li.textContent = 'Queue is empty.';
+                li.classList.add('empty-queue');
+                queueList.appendChild(li);
+            } else {
+                queueData.queue.forEach((url, index) => {
+                    const li = document.createElement('li');
+
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = url;
+                    textSpan.classList.add('queue-item-text');
+                    textSpan.onclick = () => queueControl('play', index);
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.textContent = '×';
+                    removeBtn.classList.add('remove-item-btn');
+                    removeBtn.onclick = () => queueControl('remove', index);
+
+                    li.appendChild(textSpan);
+                    li.appendChild(removeBtn);
+
+                    if (index === queueData.currentIndex) {
+                        li.classList.add('currently-playing');
+                    }
+                    queueList.appendChild(li);
+                });
+            }
+
+            currentUrlSpan.textContent = queueData.currentUrl || 'None';
+            activePlayerSpan.textContent = queueData.activePlayer || 'None';
+        }
+
+        function showMessage(text, isError = false) {
+             const messageEl = document.getElementById('message');
+             messageEl.textContent = text;
+             messageEl.style.color = isError ? '#ff8a8a' : '#f1f1f1';
+        }
+
+        // --- API CALLS ---
+        document.getElementById('urlForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const urlInput = document.getElementById('urlInput');
+            const formData = new FormData();
+            formData.append('url', urlInput.value);
+
+            fetch('/submit_url', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    showMessage(data.message);
+                    renderQueue(data);
+                    urlInput.value = ''; // Clear input field
+                })
+                .catch(error => showMessage('Error: ' + error, true));
+        });
+
+        function sendPlayerControl(action) {
+            const formData = new FormData();
+            formData.append('action', action);
+            fetch('/control_player', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => showMessage(data.message))
+                .catch(error => showMessage('Error: ' + error, true));
+        }
+
+         function sendVolumeControl(command) {
+            const formData = new FormData();
+            formData.append('command', command);
+            fetch('/volume_control', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => showMessage(data.message))
+                .catch(error => showMessage('Error: ' + error, true));
+        }
+
+        function queueControl(action, index = null) {
+            let url = '/queue/' + action;
+            if (index !== null) {
+                url += '/' + index;
+            }
+
+            fetch(url, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    showMessage(data.message);
+                    renderQueue(data);
+                })
+                .catch(error => showMessage('Error: ' + error, true));
+        }
+
+        // --- INITIAL LOAD ---
+        window.addEventListener('load', () => {
+            fetch('/queue/status')
+                .then(response => response.json())
+                .then(data => renderQueue(data))
+                .catch(error => showMessage('Error fetching initial status: ' + error, true));
+
+            // Service worker registration
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}").then(registration => {
+                    console.log('ServiceWorker registration successful');
+                }, err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

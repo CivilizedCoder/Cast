@@ -1,0 +1,15 @@
+{
+  "short_name": "Cast",
+  "name": "Wilson Home Casting",
+  "icons": [
+    {
+      "src": "/static/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#2c2c2c",
+  "background_color": "#2c2c2c"
+}
